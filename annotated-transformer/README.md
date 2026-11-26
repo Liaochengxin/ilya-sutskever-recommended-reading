@@ -11,11 +11,15 @@ http://nlp.seas.harvard.edu/annotated-transformer/
 
 # Package Dependencies
 
-Use `requirements.txt` to install library dependencies with pip:
+Dependencies are managed with [uv](https://docs.astral.sh/uv/) (`pyproject.toml` + `uv.lock`). To build the environment:
 
 ```
-pip install -r requirements.txt
+uv sync
 ```
+
+This installs torch 2.3.1 (MPS-capable on Apple Silicon), HuggingFace `datasets`, spacy with the `de_core_news_sm` / `en_core_web_sm` model wheels, altair, jupytext, and dev tools (black, flake8).
+
+Note: this modernized port loads Multi30k from HuggingFace Hub instead of the discontinued torchtext.
 
 
 # Notebook Setup

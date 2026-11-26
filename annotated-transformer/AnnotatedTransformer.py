@@ -97,7 +97,7 @@
 # <a href="#background">Skip</a>
 
 # %% id="NwClcbH6Tsp8"
-# # !pip install -r requirements.txt
+# # Dependencies are managed with uv: run `uv sync` in this directory
 
 # %% id="NwClcbH6Tsp8"
 # # Uncomment for colab

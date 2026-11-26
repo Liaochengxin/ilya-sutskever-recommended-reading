@@ -1,0 +1,36 @@
+[project]
+name = "annotated-transformer"
+version = "1.0.0"
+description = "Modernized port of The Annotated Transformer (harvardnlp)"
+requires-python = ">=3.10"
+dependencies = [
+    # numpy must stay <2: thinc/pandas wheels are built against numpy 1.x
+    "numpy<2",
+    # pinned: torchtext-era ABI verified working; MPS supported
+    "torch==2.3.1",
+    "datasets>=3.0",
+    # <3.8 to match the spacy model wheels installed via wheel URL
+    "spacy>=3.7,<3.8",
+    # spacy models are plain wheels; install via uv sources below
+    "de-core-news-sm",
+    "en-core-web-sm",
+    "altair>=5",
+    "pandas",
+    "GPUtil",
+    "jupytext",
+    "ipykernel",
+    "nbconvert",
+]
+
+[dependency-groups]
+dev = [
+    "black",
+    "flake8",
+]
+
+[tool.black]
+line-length = 79
+
+[tool.uv.sources]
+de-core-news-sm = { url = "https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.7.0/de_core_news_sm-3.7.0-py3-none-any.whl" }
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.0/en_core_web_sm-3.7.0-py3-none-any.whl" }

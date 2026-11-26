@@ -31,8 +31,6 @@ black: the_annotated_transformer.ipynb
 clean: 
 	rm -f the_annotated_transformer.ipynb
 
-# dataset is downloaded automatically from HuggingFace Hub
+# deps and spacy model wheels are declared in pyproject.toml
 setup:
-	pip install -r requirements.txt
-	python -m spacy download de_core_news_sm
-	python -m spacy download en_core_web_sm
+	uv sync
