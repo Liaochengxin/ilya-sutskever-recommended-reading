@@ -102,7 +102,7 @@
 # %% id="NwClcbH6Tsp8"
 # # Uncomment for colab
 # #
-# # !pip install -q torchdata==0.3.0 torchtext==0.12 spacy==3.2 altair GPUtil
+# # !pip install -q torch datasets spacy altair GPUtil
 # # !python -m spacy download de_core_news_sm
 # # !python -m spacy download en_core_web_sm
 
@@ -116,13 +116,12 @@ from torch.nn.functional import log_softmax, pad
 import math
 import copy
 import time
+from collections import Counter
 from torch.optim.lr_scheduler import LambdaLR
 import pandas as pd
 import altair as alt
-from torchtext.data.functional import to_map_style_dataset
 from torch.utils.data import DataLoader
-from torchtext.vocab import build_vocab_from_iterator
-import torchtext.datasets as datasets
+from datasets import load_dataset
 import spacy
 import GPUtil
 import warnings
@@ -130,7 +129,6 @@ from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
-
 
 # Set to False to skip notebook execution (e.g. for debugging)
 warnings.filterwarnings("ignore")
@@ -227,6 +225,7 @@ class DummyScheduler:
 # [(cite)](https://arxiv.org/abs/1308.0850), consuming the previously
 # generated symbols as additional input when generating the next.
 
+
 # %% id="k0XGXhzRTsqB"
 class EncoderDecoder(nn.Module):
     """
@@ -283,6 +282,7 @@ class Generator(nn.Module):
 #
 # The encoder is composed of a stack of $N=6$ identical layers.
 
+
 # %% id="2gxTApUYTsqD"
 def clones(module, N):
     "Produce N identical layers."
@@ -311,6 +311,7 @@ class Encoder(nn.Module):
 # [(cite)](https://arxiv.org/abs/1512.03385) around each of the two
 # sub-layers, followed by layer normalization
 # [(cite)](https://arxiv.org/abs/1607.06450).
+
 
 # %% id="3jKa_prZTsqE"
 class LayerNorm(nn.Module):
@@ -341,6 +342,7 @@ class LayerNorm(nn.Module):
 # model, as well as the embedding layers, produce outputs of dimension
 # $d_{\text{model}}=512$.
 
+
 # %% id="U1P7zI0eTsqE"
 class SublayerConnection(nn.Module):
     """
@@ -363,6 +365,7 @@ class SublayerConnection(nn.Module):
 # Each layer has two sub-layers. The first is a multi-head
 # self-attention mechanism, and the second is a simple, position-wise
 # fully connected feed-forward network.
+
 
 # %% id="qYkUFr6GTsqE"
 class EncoderLayer(nn.Module):
@@ -387,6 +390,7 @@ class EncoderLayer(nn.Module):
 # The decoder is also composed of a stack of $N=6$ identical layers.
 #
 
+
 # %%
 class Decoder(nn.Module):
     "Generic N layer decoder with masking."
@@ -409,6 +413,7 @@ class Decoder(nn.Module):
 # the output of the encoder stack.  Similar to the encoder, we employ
 # residual connections around each of the sub-layers, followed by
 # layer normalization.
+
 
 # %% id="M2hA1xFQTsqF"
 class DecoderLayer(nn.Module):
@@ -438,6 +443,7 @@ class DecoderLayer(nn.Module):
 # one position, ensures that the predictions for position $i$ can
 # depend only on the known outputs at positions less than $i$.
 
+
 # %% id="QN98O2l3TsqF"
 def subsequent_mask(size):
     "Mask out subsequent positions."
@@ -453,6 +459,7 @@ def subsequent_mask(size):
 # > Below the attention mask shows the position each tgt word (row) is
 # > allowed to look at (column). Words are blocked for attending to
 # > future words during training.
+
 
 # %% id="ht_FtgYAokC4"
 def example_mask():
@@ -515,6 +522,7 @@ show_example(example_mask)
 # $$
 #    \mathrm{Attention}(Q, K, V) = \mathrm{softmax}(\frac{QK^T}{\sqrt{d_k}})V
 # $$
+
 
 # %% id="qsoVxS5yTsqG"
 def attention(query, key, value, mask=None, dropout=None):
@@ -585,6 +593,7 @@ def attention(query, key, value, mask=None, dropout=None):
 # to the reduced dimension of each head, the total computational cost
 # is similar to that of single-head attention with full
 # dimensionality.
+
 
 # %% id="D2LBMKCQTsqH"
 class MultiHeadedAttention(nn.Module):
@@ -674,6 +683,7 @@ class MultiHeadedAttention(nn.Module):
 # $d_{\text{model}}=512$, and the inner-layer has dimensionality
 # $d_{ff}=2048$.
 
+
 # %% id="6HHCemCxTsqH"
 class PositionwiseFeedForward(nn.Module):
     "Implements FFN equation."
@@ -700,6 +710,7 @@ class PositionwiseFeedForward(nn.Module):
 # the pre-softmax linear transformation, similar to
 # [(cite)](https://arxiv.org/abs/1608.05859). In the embedding layers,
 # we multiply those weights by $\sqrt{d_{\text{model}}}$.
+
 
 # %% id="pyrChq9qTsqH"
 class Embeddings(nn.Module):
@@ -745,6 +756,7 @@ class Embeddings(nn.Module):
 #
 #
 
+
 # %% id="zaHGD4yJTsqH"
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
@@ -774,6 +786,7 @@ class PositionalEncoding(nn.Module):
 # > Below the positional encoding will add in a sine wave based on
 # > position. The frequency and offset of the wave is different for
 # > each dimension.
+
 
 # %% id="rnvHk_1QokC6" type="example"
 def example_positional():
@@ -819,6 +832,7 @@ show_example(example_positional)
 #
 # > Here we define a function from hyperparameters to a full model.
 
+
 # %% id="mPe1ES0UTsqI"
 def make_model(
     src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1
@@ -853,6 +867,7 @@ def make_model(
 # model is not trained yet. In the next tutorial we will build the
 # training function and try to train our model to memorize the numbers
 # from 1 to 10.
+
 
 # %%
 def inference_test():
@@ -904,6 +919,7 @@ show_example(run_tests)
 # %% [markdown] id="G7SkCenXTsqI"
 # ## Batches and Masking
 
+
 # %%
 class Batch:
     """Object for holding a batch of data with mask during training."""
@@ -935,6 +951,7 @@ class Batch:
 
 # %% [markdown] id="Q8zzeUc0TsqJ"
 # ## Training Loop
+
 
 # %%
 class TrainState:
@@ -1055,6 +1072,7 @@ def run_epoch(
 # > Example of the curves of this model for different model sizes and
 # > for optimization hyperparameters.
 
+
 # %% id="zUz3PdAnVg4o"
 def rate(step, model_size, factor, warmup):
     """
@@ -1144,6 +1162,7 @@ example_learning_schedule()
 # > using a one-hot target distribution, we create a distribution that
 # > has `confidence` of the correct word and the rest of the
 # > `smoothing` mass distributed throughout the vocabulary.
+
 
 # %% id="shU2GyiETsqK"
 class LabelSmoothing(nn.Module):
@@ -1272,6 +1291,7 @@ show_example(penalization_visualization)
 # %% [markdown] id="jJa-89_pTsqK"
 # ## Synthetic Data
 
+
 # %% id="g1aTxeqqTsqK"
 def data_gen(V, batch_size, nbatches):
     "Generate random data for a src-tgt copy task."
@@ -1285,6 +1305,7 @@ def data_gen(V, batch_size, nbatches):
 
 # %% [markdown] id="XTXwD9hUTsqK"
 # ## Loss Computation
+
 
 # %% id="3J8EJm87TsqK"
 class SimpleLossCompute:
@@ -1307,6 +1328,7 @@ class SimpleLossCompute:
 
 # %% [markdown] id="eDAI7ELUTsqL"
 # ## Greedy Decoding
+
 
 # %% [markdown] id="LFkWakplTsqL"
 # > This code predicts a translation using greedy decoding for simplicity.
@@ -1389,8 +1411,10 @@ def example_simple_model():
 # %% [markdown] id="8y9dpfolTsqL"
 # ## Data Loading
 #
-# > We will load the dataset using torchtext and spacy for
-# > tokenization.
+# > We will load the Multi30k dataset from HuggingFace Hub and use
+# > spacy for tokenization. (The original notebook used torchtext,
+# > which was discontinued in 2024, so we now download the data with
+# > `datasets` and build the vocabulary ourselves.)
 
 # %%
 # Load spacy tokenizer models, download them if they haven't been
@@ -1425,6 +1449,45 @@ def yield_tokens(data_iter, tokenizer, index):
 
 
 # %% id="jU3kVlV5okC-"
+class Vocab:
+    "A minimal replacement for torchtext's Vocab, which is discontinued."
+
+    def __init__(self, token_counter, min_freq=1, specials=None):
+        specials = specials or []
+        self.itos = list(specials)
+        for tok, freq in token_counter.most_common():
+            if freq >= min_freq and tok not in self.itos:
+                self.itos.append(tok)
+        self.stoi = {tok: i for i, tok in enumerate(self.itos)}
+        self.set_default_index(self.stoi["<unk>"])
+
+    def __getitem__(self, token):
+        return self.stoi.get(token, self.default_index)
+
+    def __call__(self, tokens):
+        return [self[token] for token in tokens]
+
+    def __len__(self):
+        return len(self.itos)
+
+    def get_stoi(self):
+        return self.stoi
+
+    def get_itos(self):
+        return self.itos
+
+    def set_default_index(self, index):
+        self.default_index = index
+
+
+def load_data():
+    "Load Multi30k de-en translation data as lists of (de, en) pairs."
+    ds = load_dataset("bentrevett/multi30k")
+    return (
+        [(ex["de"], ex["en"]) for ex in ds["train"]],
+        [(ex["de"], ex["en"]) for ex in ds["validation"]],
+        [(ex["de"], ex["en"]) for ex in ds["test"]],
+    )
 
 
 def build_vocabulary(spacy_de, spacy_en):
@@ -1434,24 +1497,28 @@ def build_vocabulary(spacy_de, spacy_en):
     def tokenize_en(text):
         return tokenize(text, spacy_en)
 
+    print("Loading Multi30k dataset ...")
+    train, val, test = load_data()
+
     print("Building German Vocabulary ...")
-    train, val, test = datasets.Multi30k(language_pair=("de", "en"))
-    vocab_src = build_vocab_from_iterator(
-        yield_tokens(train + val + test, tokenize_de, index=0),
+    tok_counter_de = Counter()
+    for tokens in yield_tokens(train + val + test, tokenize_de, index=0):
+        tok_counter_de.update(tokens)
+    vocab_src = Vocab(
+        tok_counter_de,
         min_freq=2,
         specials=["<s>", "</s>", "<blank>", "<unk>"],
     )
 
     print("Building English Vocabulary ...")
-    train, val, test = datasets.Multi30k(language_pair=("de", "en"))
-    vocab_tgt = build_vocab_from_iterator(
-        yield_tokens(train + val + test, tokenize_en, index=1),
+    tok_counter_en = Counter()
+    for tokens in yield_tokens(train + val + test, tokenize_en, index=1):
+        tok_counter_en.update(tokens)
+    vocab_tgt = Vocab(
+        tok_counter_en,
         min_freq=2,
         specials=["<s>", "</s>", "<blank>", "<unk>"],
     )
-
-    vocab_src.set_default_index(vocab_src["<unk>"])
-    vocab_tgt.set_default_index(vocab_tgt["<unk>"])
 
     return vocab_src, vocab_tgt
 
@@ -1478,12 +1545,13 @@ if is_interactive_notebook():
 #
 # > Batching matters a ton for speed. We want to have very evenly
 # > divided batches, with absolutely minimal padding. To do this we
-# > have to hack a bit around the default torchtext batching. This
-# > code patches their default batching to make sure we search over
+# > have to hack a bit around the default DataLoader batching. This
+# > code patches the default batching to make sure we search over
 # > enough sentences to find tight batches.
 
 # %% [markdown] id="kDEj-hCgokC-" tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Iterators
+
 
 # %% id="wGsIHFgOokC_"
 def collate_batch(
@@ -1499,7 +1567,7 @@ def collate_batch(
     bs_id = torch.tensor([0], device=device)  # <s> token id
     eos_id = torch.tensor([1], device=device)  # </s> token id
     src_list, tgt_list = [], []
-    for (_src, _tgt) in batch:
+    for _src, _tgt in batch:
         processed_src = torch.cat(
             [
                 bs_id,
@@ -1578,30 +1646,21 @@ def create_dataloaders(
             pad_id=vocab_src.get_stoi()["<blank>"],
         )
 
-    train_iter, valid_iter, test_iter = datasets.Multi30k(
-        language_pair=("de", "en")
-    )
+    train_iter, valid_iter, _ = load_data()
 
-    train_iter_map = to_map_style_dataset(
-        train_iter
-    )  # DistributedSampler needs a dataset len()
-    train_sampler = (
-        DistributedSampler(train_iter_map) if is_distributed else None
-    )
-    valid_iter_map = to_map_style_dataset(valid_iter)
-    valid_sampler = (
-        DistributedSampler(valid_iter_map) if is_distributed else None
-    )
+    # DistributedSampler needs a dataset len(), which lists provide
+    train_sampler = DistributedSampler(train_iter) if is_distributed else None
+    valid_sampler = DistributedSampler(valid_iter) if is_distributed else None
 
     train_dataloader = DataLoader(
-        train_iter_map,
+        train_iter,
         batch_size=batch_size,
         shuffle=(train_sampler is None),
         sampler=train_sampler,
         collate_fn=collate_fn,
     )
     valid_dataloader = DataLoader(
-        valid_iter_map,
+        valid_iter,
         batch_size=batch_size,
         shuffle=(valid_sampler is None),
         sampler=valid_sampler,
@@ -1612,6 +1671,7 @@ def create_dataloaders(
 
 # %% [markdown] id="90qM8RzCTsqM"
 # ## Training the System
+
 
 # %%
 def train_worker(
@@ -1829,6 +1889,7 @@ if False:
 # > create an ensembling effect. We can do this after the fact if we
 # > have a bunch of models:
 
+
 # %% id="hAFEa78JokDB"
 def average(model, models):
     "Average models into model"
@@ -1951,6 +2012,7 @@ def run_model_example(n_examples=5):
 # > can further visualize it to see what is happening at each layer of
 # > the attention
 
+
 # %%
 def mtx2df(m, max_row, max_col, row_tokens, col_tokens):
     "convert a dense matrix to a data frame with row and column indices"
@@ -2041,6 +2103,7 @@ def visualize_layer(model, layer, getter_fn, ntokens, row_tokens, col_tokens):
 # %% [markdown]
 # ## Encoder Self Attention
 
+
 # %%
 def viz_encoder_self():
     model, example_data = run_model_example(n_examples=1)
@@ -2069,6 +2132,7 @@ show_example(viz_encoder_self)
 
 # %% [markdown]
 # ## Decoder Self Attention
+
 
 # %%
 def viz_decoder_self():
@@ -2101,6 +2165,7 @@ show_example(viz_decoder_self)
 
 # %% [markdown]
 # ## Decoder Src Attention
+
 
 # %%
 def viz_decoder_src():
