@@ -1,0 +1,20 @@
+# virtual environments
+.venv/
+venv/
+
+# python
+__pycache__/
+*.pyc
+
+# jupyter
+.ipynb_checkpoints/
+
+# model / data artifacts
+*.pt
+.data/
+
+# experiment tracking
+wandb/
+
+# macOS
+.DS_Store

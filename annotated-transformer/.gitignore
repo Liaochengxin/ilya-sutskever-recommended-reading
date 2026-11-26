@@ -1,0 +1,8 @@
+*.ipynb
+# track my working notebook (outputs cleared before commit)
+!AnnotatedTransformer.ipynb
+.ipynb_checkpoints
+.data
+*.pt
+__pycache__
+wandb
